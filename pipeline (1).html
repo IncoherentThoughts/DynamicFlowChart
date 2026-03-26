@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar Physics Research Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f3f2ee;--surface:#fff;--border:rgba(0,0,0,.09);--text:#1a1a1a;--muted:#999;
+  --phase-border:rgba(0,0,0,.055);--phase-bg:rgba(0,0,0,.016);--pop-shadow:0 8px 40px rgba(0,0,0,.13);
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#111;--surface:#1b1b1b;--border:rgba(255,255,255,.1);--text:#f0ede5;--muted:#888;
+  --phase-border:rgba(255,255,255,.07);--phase-bg:rgba(255,255,255,.02);--pop-shadow:0 8px 40px rgba(0,0,0,.5);
+}}
+body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+.hdr{
+  background:var(--surface);border-bottom:.5px solid var(--border);
+  padding:10px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:100;
+}
+.hdr-title h1{font-size:15px;font-weight:800;letter-spacing:-.03em}
+.hdr-title p{font-family:'Space Mono',monospace;font-size:8.5px;color:var(--muted);margin-top:2px;letter-spacing:.05em}
+.toolbar{display:flex;gap:5px}
+.tbtn{
+  font-family:'Syne',sans-serif;font-size:11.5px;font-weight:700;
+  padding:5px 12px;border-radius:7px;border:.5px solid var(--border);
+  background:transparent;color:var(--text);cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;gap:4px;white-space:nowrap;
+}
+.tbtn:hover{background:var(--phase-bg)}
+.tbtn.active{background:var(--text);color:var(--surface);border-color:var(--text)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+.scroll{overflow-x:auto;padding:18px}
+#canvas{
+  position:relative;width:1520px;min-height:650px;
+  background:var(--surface);border:.5px solid var(--border);border-radius:14px;
+}
+#canvas.mode-connect{cursor:crosshair}
+#canvas.mode-addnode{cursor:cell}
+
+.pzone{position:absolute;top:0;bottom:0;pointer-events:none}
+.pdiv{position:absolute;top:0;bottom:0;width:.5px;background:var(--phase-border);pointer-events:none}
+.plabel{
+  position:absolute;top:15px;font-family:'Space Mono',monospace;font-size:8.5px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);pointer-events:none;opacity:.5;
+}
+#arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;overflow:visible}
+
+.adel{
+  position:absolute;z-index:20;width:18px;height:18px;border-radius:50%;
+  background:var(--surface);border:.5px solid rgba(200,40,40,.35);
+  color:#bf2020;cursor:pointer;font-size:15px;font-weight:700;line-height:1;
+  display:flex;align-items:center;justify-content:center;padding:0;transition:background .12s;
+  font-family:sans-serif;
+}
+.adel:hover{background:rgba(200,40,40,.12)}
+
+.node{
+  position:absolute;border-radius:10px;border:.5px solid;padding:0 0 10px;
+  cursor:grab;user-select:none;z-index:10;transition:transform .12s ease,box-shadow .12s ease;
+}
+.node:hover{transform:translateY(-1px)}
+.node.dragging{cursor:grabbing;z-index:50;transition:none;opacity:.9}
+.node.selected{box-shadow:0 0 0 2px var(--text)}
+.node.conn-src{box-shadow:0 0 0 2.5px #2563eb;transform:scale(1.02)}
+.node.conn-tgt{box-shadow:0 0 0 2px #16a34a}
+.node-bar{height:3px;border-radius:10px 10px 0 0;margin-bottom:7px}
+.node-inner{padding:0 12px}
+.owner-pills{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px;min-height:16px}
+.opill{
+  font-family:'Space Mono',monospace;font-size:8px;font-weight:700;
+  letter-spacing:.05em;padding:2px 6px;border-radius:10px;display:inline-block;
+}
+.node-label{font-size:12px;font-weight:600;line-height:1.5;white-space:pre-wrap}
+
+#pop{
+  position:absolute;z-index:200;width:258px;background:var(--surface);
+  border:.5px solid var(--border);border-radius:13px;box-shadow:var(--pop-shadow);
+  padding:13px;display:none;
+}
+.pop-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.pop-hdr h3{font-size:11.5px;font-weight:800;letter-spacing:.01em}
+.pop-x{
+  width:22px;height:22px;border-radius:6px;border:.5px solid var(--border);
+  background:transparent;color:var(--text);cursor:pointer;font-size:15px;
+  display:flex;align-items:center;justify-content:center;transition:background .12s;font-family:sans-serif;
+}
+.pop-x:hover{background:var(--phase-bg)}
+.psec{
+  font-family:'Space Mono',monospace;font-size:8px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;
+}
+#pop-label{
+  width:100%;padding:7px 9px;border-radius:7px;border:.5px solid var(--border);
+  background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;
+  font-size:12px;font-weight:600;resize:vertical;min-height:56px;outline:none;margin-bottom:13px;
+}
+#pop-label:focus{border-color:rgba(128,128,128,.5)}
+.ocheck-list{display:flex;flex-direction:column;gap:5px;margin-bottom:9px}
+.ocheck{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;cursor:pointer}
+.ocheck input{display:none}
+.cbox{
+  width:15px;height:15px;border-radius:4px;flex-shrink:0;border:1.5px solid;
+  display:flex;align-items:center;justify-content:center;transition:background .12s;
+}
+.ck{display:none;font-size:9px;font-weight:900;font-family:sans-serif}
+.ocheck input:checked+.cbox .ck{display:block}
+.add-row{display:flex;gap:5px;margin-top:8px;margin-bottom:13px}
+#new-name{
+  flex:1;padding:5px 8px;border-radius:6px;border:.5px solid var(--border);
+  background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;
+  font-size:12px;font-weight:600;outline:none;
+}
+#new-name:focus{border-color:rgba(128,128,128,.5)}
+#new-name::placeholder{font-weight:400;color:var(--muted)}
+.add-btn{
+  padding:5px 10px;border-radius:6px;border:.5px solid var(--border);
+  background:transparent;color:var(--text);cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:700;transition:background .12s;
+}
+.add-btn:hover{background:var(--phase-bg)}
+.pop-del{
+  width:100%;padding:6px;border-radius:7px;margin-top:4px;
+  border:.5px solid rgba(200,40,40,.3);background:rgba(200,40,40,.06);
+  color:#bf2020;cursor:pointer;font-family:'Syne',sans-serif;
+  font-size:12px;font-weight:700;transition:background .12s;
+}
+.pop-del:hover{background:rgba(200,40,40,.12)}
+
+#hint{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--text);color:var(--surface);padding:7px 16px;border-radius:20px;
+  font-size:11.5px;font-weight:600;pointer-events:none;
+  opacity:0;transition:opacity .2s;z-index:300;white-space:nowrap;
+}
+#hint.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">
+    <h1>Solar Physics Research Pipeline</h1>
+    <p id="mode-hint">Select — click node to edit &nbsp;·&nbsp; drag to move &nbsp;·&nbsp; × on arrows to delete</p>
+  </div>
+  <div class="toolbar">
+    <button class="tbtn active" id="btn-select" onclick="setMode('select')">↖ Select</button>
+    <button class="tbtn" id="btn-connect" onclick="setMode('connect')">⤷ Connect</button>
+    <button class="tbtn" id="btn-add" onclick="setMode('addnode')">+ Add Node</button>
+  </div>
+  <div class="legend" id="legend"></div>
+</div>
+
+<div class="scroll">
+  <div id="canvas">
+    <div class="pzone" style="left:0;width:430px;background:var(--phase-bg);border-radius:14px 0 0 14px"></div>
+    <div class="pdiv" style="left:430px"></div>
+    <div class="pdiv" style="left:848px"></div>
+    <div class="plabel" style="left:18px">Input &amp; Modeling</div>
+    <div class="plabel" style="left:450px">Instrument Simulation</div>
+    <div class="plabel" style="left:868px">Analysis &amp; Output</div>
+    <svg id="arrows">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+    </svg>
+    <div id="pop">
+      <div class="pop-hdr">
+        <h3>Edit Node</h3>
+        <button class="pop-x" onclick="closePop()">×</button>
+      </div>
+      <div class="psec">Label</div>
+      <textarea id="pop-label" oninput="onLabelChange()"></textarea>
+      <div class="psec">Assign to</div>
+      <div class="ocheck-list" id="ocheck-list"></div>
+      <div class="psec" style="margin-top:6px">Add new person</div>
+      <div class="add-row">
+        <input type="text" id="new-name" placeholder="Name…" maxlength="20"
+          onkeydown="if(event.key==='Enter')addPerson()">
+        <button class="add-btn" onclick="addPerson()">Add</button>
+      </div>
+      <button class="pop-del" onclick="deleteNode()">Delete node</button>
+    </div>
+  </div>
+</div>
+
+<div id="hint"></div>
+
+<script>
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+
+// ── People registry ──────────────────────────────────────────────────────────
+function mkP(lc,dc,lbg,dbg,ltx,dtx){
+  return{color:dark?dc:lc,bg:dark?dbg:lbg,tx:dark?dtx:ltx,border:dark?dc+'66':lc+'88'};
+}
+const PEOPLE = new Map([
+  ['jake',  {label:'Jake',  ...mkP('#BA7517','#EF9F27','#FAEEDA','#412402','#412402','#FAC775')}],
+  ['ian',   {label:'Ian',   ...mkP('#0F6E56','#1D9E75','#E1F5EE','#04342C','#04342C','#9FE1CB')}],
+  ['chris', {label:'Chris', ...mkP('#993C1D','#D85A30','#FAECE7','#4A1B0C','#4A1B0C','#F5C4B3')}],
+  ['evan',  {label:'Evan',  ...mkP('#534AB7','#7F77DD','#EEEDFE','#26215C','#26215C','#AFA9EC')}],
+  ['all',   {label:'All',   ...mkP('#185FA5','#378ADD','#E6F1FB','#042C53','#042C53','#B5D4F4')}],
+]);
+const SPARE = [
+  mkP('#993556','#D4537E','#FBEAF0','#4B1528','#4B1528','#F4C0D1'),
+  mkP('#3B6D11','#639922','#EAF3DE','#173404','#173404','#C0DD97'),
+  mkP('#A32D2D','#E24B4A','#FCEBEB','#501313','#501313','#F7C1C1'),
+  mkP('#5F5E5A','#888780','#F1EFE8','#2C2C2A','#2C2C2A','#D3D1C7'),
+];
+let spareIdx=0;
+function regPerson(label){
+  const id=label.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now().toString(36);
+  PEOPLE.set(id,{label,...SPARE[spareIdx%SPARE.length]});
+  spareIdx++;renderLegend();return id;
+}
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+let nid=20,cid=20;
+const nodes=[
+  {id:'fism',       owners:['jake'],  label:'FISM',                                               x:28, y:150,w:116},
+  {id:'spectral',   owners:['jake'],  label:'Spectral\nmodeling',                                 x:196,y:68, w:148},
+  {id:'chianti',    owners:['jake'],  label:'CHIANTI\n(DEM)',                                     x:28, y:278,w:124},
+  {id:'synthetic',  owners:['ian'],   label:'Synthetic SPP\n• Amplitude\n• Frequencies\n• Duration',x:196,y:264,w:168},
+  {id:'goes',       owners:['jake'],  label:'GOES data\n(interpolate)',                           x:28, y:428,w:148},
+  {id:'sdo',        owners:['chris'], label:'SDO/AIA\nHINODE, XRT',                              x:498,y:62, w:158},
+  {id:'oversampled',owners:['ian'],   label:'Oversampled\nanalytics &\nwaveform',                 x:448,y:254,w:155},
+  {id:'instmodel',  owners:['chris'], label:'Instrument model\n• Resample\n• Add noise\n• Poisson noise\n• Electronic noise',x:636,y:184,w:192},
+  {id:'database',   owners:['ian'],   label:'Database\n• Learn instrument\n  noise profile',      x:448,y:432,w:170},
+  {id:'chrispaper', owners:['chris'], label:'Write instrument\npaper(s)',                         x:196,y:480,w:164},
+  {id:'tem',        owners:['jake'],  label:'Temperature,\nDEM, EM Loci',                        x:892,y:72, w:168},
+  {id:'fft',        owners:['evan'],  label:'FFT analysis\n• Reconstruct\n  amplitudes/phases',   x:1096,y:152,w:182},
+  {id:'oscillations',owners:['jake'], label:'Look for\noscillations',                             x:1318,y:72, w:148},
+  {id:'wavelet',    owners:['evan'],  label:'Wavelet analysis\n• Identify SPPs\n• Statistical\n  confidence',x:1096,y:354,w:178},
+  {id:'scipapers',  owners:['all'],   label:'Write science\npapers',                              x:1318,y:364,w:140},
+];
+const conns=[
+  {id:'c1', from:'fism',        to:'spectral'},
+  {id:'c2', from:'fism',        to:'chianti'},
+  {id:'c3', from:'chianti',     to:'synthetic'},
+  {id:'c4', from:'goes',        to:'synthetic'},
+  {id:'c5', from:'synthetic',   to:'oversampled'},
+  {id:'c6', from:'sdo',         to:'oversampled'},
+  {id:'c7', from:'oversampled', to:'instmodel'},
+  {id:'c8', from:'database',    to:'instmodel'},
+  {id:'c9', from:'database',    to:'chrispaper'},
+  {id:'c10',from:'instmodel',   to:'tem'},
+  {id:'c11',from:'spectral',    to:'tem'},
+  {id:'c12',from:'tem',         to:'fft'},
+  {id:'c13',from:'fft',         to:'oscillations'},
+  {id:'c14',from:'fft',         to:'wavelet'},
+  {id:'c15',from:'wavelet',     to:'scipapers'},
+];
+
+// ── DOM ──────────────────────────────────────────────────────────────────────
+const canvas=document.getElementById('canvas');
+const svgEl=document.getElementById('arrows');
+const popEl=document.getElementById('pop');
+const hintEl=document.getElementById('hint');
+const elMap={};
+
+// ── Mode ─────────────────────────────────────────────────────────────────────
+let mode='select',connSrc=null,selId=null;
+const MHINTS={
+  select:'Select — click node to edit · drag to move · × on arrows to delete',
+  connect:'Connect — click SOURCE node, then TARGET node · ESC to cancel',
+  addnode:'Add Node — click empty area to place · ESC to cancel',
+};
+function setMode(m){
+  mode=m;
+  document.getElementById('mode-hint').textContent=MHINTS[m];
+  canvas.className=m!=='select'?'mode-'+m:'';
+  ['select','connect','add'].forEach(k=>
+    document.getElementById('btn-'+k).classList.toggle('active',k===m||(k==='add'&&m==='addnode'))
+  );
+  if(m!=='connect'){
+    if(connSrc){elMap[connSrc]?.classList.remove('conn-src');connSrc=null;}
+    showHint('');
+  }
+  if(m!=='select') closePop();
+  draw();
+}
+function showHint(msg){hintEl.textContent=msg;hintEl.classList.toggle('show',!!msg);}
+
+// ── Popover ───────────────────────────────────────────────────────────────────
+function openPop(id){
+  selId=id;
+  const n=nodes.find(n=>n.id===id),el=elMap[id];
+  el.classList.add('selected');
+  const pw=258,ch=canvas.offsetHeight||650;
+  let px=n.x+(el.offsetWidth||150)+14,py=Math.max(8,n.y);
+  if(px+pw>1510) px=Math.max(8,n.x-pw-14);
+  if(py+420>ch-8) py=Math.max(8,ch-420-8);
+  popEl.style.cssText=`display:block;left:${px}px;top:${py}px`;
+  document.getElementById('pop-label').value=n.label;
+  renderChecks(n);
+}
+function closePop(){
+  popEl.style.display='none';
+  if(selId){elMap[selId]?.classList.remove('selected');selId=null;}
+}
+function onLabelChange(){
+  if(!selId) return;
+  const n=nodes.find(n=>n.id===selId);
+  n.label=document.getElementById('pop-label').value;
+  if(elMap[selId]) elMap[selId].querySelector('.node-label').textContent=n.label;
+  draw();
+}
+function renderChecks(node){
+  const list=document.getElementById('ocheck-list');
+  list.innerHTML='';
+  PEOPLE.forEach((p,key)=>{
+    const on=node.owners.includes(key);
+    const row=document.createElement('label');row.className='ocheck';
+    const inp=document.createElement('input');inp.type='checkbox';inp.checked=on;inp.dataset.k=key;
+    const box=document.createElement('div');box.className='cbox';
+    box.style.borderColor=p.color;box.style.background=on?p.color:'transparent';
+    const ck=document.createElement('span');ck.className='ck';ck.textContent='✓';ck.style.color=p.bg;
+    box.appendChild(ck);
+    const lbl=document.createElement('span');lbl.textContent=p.label;
+    row.append(inp,box,lbl);
+    inp.addEventListener('change',e=>{
+      const k=e.target.dataset.k,n=nodes.find(n=>n.id===selId);
+      if(e.target.checked){if(!n.owners.includes(k))n.owners.push(k);}
+      else{const a=n.owners.filter(o=>o!==k);if(!a.length){e.target.checked=true;return;}n.owners=a;}
+      const isOn=n.owners.includes(k);
+      e.target.checked=isOn;box.style.background=isOn?p.color:'transparent';
+      renderEl(selId);draw();
+    });
+    list.appendChild(row);
+  });
+}
+function addPerson(){
+  const inp=document.getElementById('new-name'),name=inp.value.trim();if(!name)return;
+  regPerson(name);inp.value='';
+  if(selId) renderChecks(nodes.find(n=>n.id===selId));
+}
+function deleteNode(){
+  if(!selId)return;
+  for(let i=conns.length-1;i>=0;i--)
+    if(conns[i].from===selId||conns[i].to===selId) conns.splice(i,1);
+  const ix=nodes.findIndex(n=>n.id===selId);
+  if(ix>-1) nodes.splice(ix,1);
+  elMap[selId]?.remove();delete elMap[selId];
+  closePop();draw();
+}
+
+// ── Node rendering ─────────────────────────────────────────────────────────────
+function barCSS(owners){
+  if(owners.length===1){const p=PEOPLE.get(owners[0]);return p?`background:${p.color}`:''}
+  const s=owners.flatMap((o,i)=>{
+    const p=PEOPLE.get(o);if(!p)return[];
+    const a=(i/owners.length*100).toFixed(1),b=((i+1)/owners.length*100).toFixed(1);
+    return[`${p.color} ${a}%`,`${p.color} ${b}%`];
+  }).join(',');
+  return`background:linear-gradient(90deg,${s})`;
+}
+function renderEl(id){
+  const n=nodes.find(n=>n.id===id),el=elMap[id];if(!n||!el)return;
+  const p=PEOPLE.get(n.owners[0])||PEOPLE.get('jake');
+  el.style.background=p.bg;el.style.borderColor=p.border;el.style.color=p.tx;
+  el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.width=n.w+'px';
+  el.querySelector('.node-bar').style.cssText=barCSS(n.owners);
+  const pills=el.querySelector('.owner-pills');pills.innerHTML='';
+  n.owners.forEach(oid=>{
+    const op=PEOPLE.get(oid);if(!op)return;
+    const pill=document.createElement('span');pill.className='opill';
+    pill.textContent=op.label;
+    pill.style.cssText=`background:${op.color}22;color:${op.color};border:.5px solid ${op.color}66`;
+    pills.appendChild(pill);
+  });
+  el.querySelector('.node-label').textContent=n.label;
+}
+function mkNode(n){
+  const el=document.createElement('div');el.className='node';
+  el.innerHTML='<div class="node-bar"></div><div class="node-inner"><div class="owner-pills"></div><div class="node-label"></div></div>';
+  canvas.insertBefore(el,popEl);elMap[n.id]=el;renderEl(n.id);
+
+  // Drag
+  el.addEventListener('mousedown',e=>{
+    if(mode==='connect'||mode==='addnode')return;
+    if(popEl.contains(e.target))return;
+    let dsx=e.clientX,dsy=e.clientY,dnx=n.x,dny=n.y;
+    el.classList.add('dragging');
+    e.stopPropagation();e.preventDefault();
+    const mm=ev=>{n.x=Math.max(0,dnx+ev.clientX-dsx);n.y=Math.max(0,dny+ev.clientY-dsy);el.style.left=n.x+'px';el.style.top=n.y+'px';draw();};
+    const mu=()=>{el.classList.remove('dragging');document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);};
+    document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu);
+  });
+
+  // Click
+  el.addEventListener('click',e=>{
+    if(mode==='addnode'){e.stopPropagation();return;}
+    e.stopPropagation();
+    if(mode==='select'){
+      if(selId===n.id){closePop();return;}
+      closePop();openPop(n.id);
+    } else if(mode==='connect'){
+      if(!connSrc){
+        connSrc=n.id;el.classList.add('conn-src');
+        showHint('Source selected — now click the TARGET node');
+      } else if(connSrc!==n.id){
+        if(!conns.some(c=>c.from===connSrc&&c.to===n.id)){
+          conns.push({id:'c'+(cid++),from:connSrc,to:n.id});draw();
+          showHint('Arrow added!');setTimeout(()=>showHint(''),1800);
+        } else {
+          showHint('Arrow already exists');setTimeout(()=>showHint(''),1500);
+        }
+        elMap[connSrc]?.classList.remove('conn-src');connSrc=null;
+      }
+    }
+  });
+
+  el.addEventListener('mouseenter',()=>{if(mode==='connect'&&connSrc&&connSrc!==n.id)el.classList.add('conn-tgt');});
+  el.addEventListener('mouseleave',()=>el.classList.remove('conn-tgt'));
+}
+
+// ── Canvas click ──────────────────────────────────────────────────────────────
+canvas.addEventListener('click',e=>{
+  const hit=e.target;
+  const isCanvasBg=hit===canvas||hit.classList.contains('pzone')||hit.classList.contains('plabel')||hit.classList.contains('pdiv');
+  if(mode==='addnode'){
+    if(!isCanvasBg)return; // don't place on existing nodes
+    const r=canvas.getBoundingClientRect();
+    const x=e.clientX-r.left,y=e.clientY-r.top;
+    const id='n'+(nid++);
+    const nd={id,owners:['jake'],label:'New node',x:Math.max(0,x-78),y:Math.max(0,y-36),w:156};
+    nodes.push(nd);mkNode(nd);draw();
+    setMode('select');openPop(id);
+    setTimeout(()=>{const t=document.getElementById('pop-label');t.select();},40);
+    return;
+  }
+  if(isCanvasBg){
+    if(mode==='select') closePop();
+    if(mode==='connect'&&connSrc){elMap[connSrc]?.classList.remove('conn-src');connSrc=null;showHint('Cancelled');setTimeout(()=>showHint(''),1500);}
+  }
+});
+
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(mode==='connect'){
+    if(connSrc){elMap[connSrc]?.classList.remove('conn-src');connSrc=null;showHint('');}
+    else setMode('select');
+  } else {closePop();if(mode==='addnode')setMode('select');}
+});
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+function nR(id){
+  const el=elMap[id],n=nodes.find(n=>n.id===id);
+  if(!el||!n)return null;
+  return{x:n.x,y:n.y,w:el.offsetWidth||150,h:el.offsetHeight||80};
+}
+function eP(r,a){
+  const cx=r.x+r.w/2,cy=r.y+r.h/2,hw=r.w/2+3,hh=r.h/2+3;
+  const cos=Math.cos(a),sin=Math.sin(a);
+  if(Math.abs(cos)<1e-9)return{x:cx,y:cy+(sin>0?hh:-hh)};
+  if(Math.abs(sin)<1e-9)return{x:cx+(cos>0?hw:-hw),y:cy};
+  if(Math.abs(cos)*hh>Math.abs(sin)*hw)return{x:cx+(cos>0?hw:-hw),y:cy+sin*hw/Math.abs(cos)};
+  return{x:cx+cos*hh/Math.abs(sin),y:cy+(sin>0?hh:-hh)};
+}
+function bMid(fp,c1x,c1y,c2x,c2y,tp){
+  const t=.5,u=1-t;
+  return{x:u*u*u*fp.x+3*u*u*t*c1x+3*u*t*t*c2x+t*t*t*tp.x,
+         y:u*u*u*fp.y+3*u*u*t*c1y+3*u*t*t*c2y+t*t*t*tp.y};
+}
+function draw(){
+  svgEl.querySelectorAll('.ap').forEach(p=>p.remove());
+  document.querySelectorAll('.adel').forEach(b=>b.remove());
+  conns.forEach(conn=>{
+    const fr=nR(conn.from),tr=nR(conn.to);if(!fr||!tr)return;
+    const a=Math.atan2(tr.y+tr.h/2-fr.y-fr.h/2,tr.x+tr.w/2-fr.x-fr.w/2);
+    const fp=eP(fr,a),tp=eP(tr,a+Math.PI);
+    const dist=Math.hypot(tp.x-fp.x,tp.y-fp.y),cv=Math.min(dist*.38,92);
+    const c1x=fp.x+Math.cos(a)*cv,c1y=fp.y+Math.sin(a)*cv;
+    const c2x=tp.x-Math.cos(a)*cv,c2y=tp.y-Math.sin(a)*cv;
+    const d=`M${fp.x},${fp.y} C${c1x},${c1y} ${c2x},${c2y} ${tp.x},${tp.y}`;
+    const src=nodes.find(n=>n.id===conn.from);
+    const col=(src&&PEOPLE.get(src.owners[0])?.color)||'#888';
+    const vis=document.createElementNS('http://www.w3.org/2000/svg','path');
+    vis.classList.add('ap');
+    vis.setAttribute('d',d);vis.setAttribute('fill','none');
+    vis.setAttribute('stroke',col);vis.setAttribute('stroke-width','1.6');
+    vis.setAttribute('opacity','.55');vis.setAttribute('stroke-linecap','round');
+    vis.setAttribute('marker-end','url(#arr)');
+    svgEl.appendChild(vis);
+    // Delete button
+    if(mode==='select'){
+      const mid=bMid(fp,c1x,c1y,c2x,c2y,tp);
+      const btn=document.createElement('button');btn.className='adel';btn.textContent='×';
+      btn.style.left=(mid.x-9)+'px';btn.style.top=(mid.y-9)+'px';btn.title='Delete arrow';
+      btn.addEventListener('click',e=>{
+        e.stopPropagation();
+        vis.setAttribute('stroke','#E24B4A');vis.setAttribute('opacity','.9');
+        setTimeout(()=>{const i=conns.findIndex(c=>c.id===conn.id);if(i>-1)conns.splice(i,1);draw();},280);
+      });
+      canvas.insertBefore(btn,popEl);
+    }
+  });
+}
+
+function renderLegend(){
+  const leg=document.getElementById('legend');leg.innerHTML='';
+  PEOPLE.forEach(p=>{
+    const d=document.createElement('div');d.className='leg';
+    d.innerHTML=`<div class="leg-dot" style="background:${p.color}"></div>${p.label}`;
+    leg.appendChild(d);
+  });
+}
+
+nodes.forEach(n=>mkNode(n));
+renderLegend();
+requestAnimationFrame(()=>requestAnimationFrame(draw));
+</script>
+</body>
+</html>
